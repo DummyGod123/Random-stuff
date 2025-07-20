@@ -1,3 +1,67 @@
+
+class LogViewModel : ViewModel() {
+
+    private val _logsLiveData = MutableLiveData<String>()
+    val logsLiveData: LiveData<String> = _logsLiveData
+
+    private var logProcess: Process? = null
+    private var logReaderThread: Thread? = null
+    private val maxChars = 1000
+    private val tag = "mine" // change this to your log tag
+
+    init {
+        startReadingLogs()
+    }
+
+    private fun startReadingLogs() {
+        logReaderThread = Thread {
+            try {
+                // Optional: Clear previous logs
+                Runtime.getRuntime().exec("logcat -c")
+
+                // Start reading logcat
+                logProcess = Runtime.getRuntime().exec("logcat")
+                val reader = BufferedReader(InputStreamReader(logProcess!!.inputStream))
+
+                val logBuffer = StringBuilder()
+                var line: String?
+
+                while (reader.readLine().also { line = it } != null) {
+                    if (line!!.contains(tag)) {
+                        logBuffer.appendLine(line)
+
+                        // Trim to first 1000 characters only
+                        if (logBuffer.length > maxChars) {
+                            logBuffer.setLength(maxChars)
+                        }
+
+                        _logsLiveData.postValue(logBuffer.toString())
+                        break // stop after first 1000 chars
+                    }
+                }
+
+                reader.close()
+                logProcess?.destroy()
+
+            } catch (e: IOException) {
+                _logsLiveData.postValue("Error reading logs: ${e.message}")
+            }
+        }
+
+        logReaderThread?.start()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        logProcess?.destroy()
+        logReaderThread?.interrupt()
+    }
+}
+
+
+
+
+
 class LogFragment : Fragment() {
 
     private lateinit var logTextView: TextView
